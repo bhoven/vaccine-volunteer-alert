@@ -17,11 +17,13 @@ export class VaccineAlertStack extends cdk.Stack {
       type: 'String',
       description: 'Phone number which will receive alerts via SMS'
     })
-    const phoneNumber = phoneNumberParameter.valueAsString.startsWith('+1') 
-      ? phoneNumberParameter.valueAsString : '+1' + phoneNumberParameter.valueAsString
-    alertTopic.addSubscription(new SmsSubscription(phoneNumber))
+    const phoneNumbers = phoneNumberParameter.valueAsString.split(',')
+    phoneNumbers.forEach(phoneNumber => {
+      const subscriptionPhoneNumber = phoneNumber.startsWith('+1') ? phoneNumber : '+1' + phoneNumber
+      alertTopic.addSubscription(new SmsSubscription(subscriptionPhoneNumber))
+    })
 
-    const monitorFunction = new lambda.Function(this, 'VaccineHandler', {
+    const monitorFunction = new lambda.Function(this, 'VaccineMonitorHandler', {
       runtime: lambda.Runtime.NODEJS_14_X,
       code: lambda.Code.fromAsset('src'),
       handler: 'vaccine-monitor.handler',
@@ -29,19 +31,11 @@ export class VaccineAlertStack extends cdk.Stack {
         ALERT_TOPIC_ARN: alertTopic.topicArn
       }
     })
-    const topicAccessPolicy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        "sns:ListTopics"
-      ]
-    })
-    topicAccessPolicy.addAllResources()
-    monitorFunction.addToRolePolicy(topicAccessPolicy)
     alertTopic.grantPublish(monitorFunction)
 
     const lambdaTarget = new targets.LambdaFunction(monitorFunction)
     const scheduleRule = new events.Rule(this, 'MonitorScheduleRule', {
-      schedule: Schedule.cron({ minute: '0', hour: '*' }),
+      schedule: Schedule.cron({ minute: '*/15' }),
       targets: [lambdaTarget]
     })
   }
