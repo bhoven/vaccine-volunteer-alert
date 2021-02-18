@@ -1,10 +1,13 @@
-const { SNS } = require('aws-sdk')
+const { SNS, DynamoDB } = require('aws-sdk')
 const axios = require('axios')
+
+const volunteerUrl = 'https://volunteer.covidvaccineseattle.org'
+const foundTermsTableName = process.env.FOUND_TERMS_TABLE_NAME
 
 exports.handler = async function handler(event) {
   console.log("request: ", JSON.stringify(event, undefined, 2))
 
-  const response = await axios.get('https://volunteer.covidvaccineseattle.org')
+  const response = await axios.get(volunteerUrl)
   console.log('Response status: ', response.status)
 
   let foundTerms = []
@@ -15,9 +18,10 @@ exports.handler = async function handler(event) {
       foundTerms.push(searchTerm)
     }
   })
+  console.log('Found terms: ', foundTerms)
 
-
-  if (foundTerms.length > 0) {
+  const newFoundTerms = await filterToNewFoundTerms(foundTerms)
+  if (newFoundTerms.length > 0) {
     let message = 'Found availability: ' + foundTerms.join(', ')
     const params = {
       Message: message,
@@ -33,9 +37,10 @@ exports.handler = async function handler(event) {
 
   return {
     statusCode: 200,
-    headers: {"Content-Type": "text/plain"},
+    headers: {"Content-Type": "application/json"},
     body: {
-      "foundTerms": foundTerms
+      "foundTerms": foundTerms,
+      "newFoundTerms": newFoundTerms
     }
   }
 }
@@ -59,18 +64,18 @@ function generateSearchTerm(startDate) {
   let endDate = new Date(startDate.getTime())
   endDate.setDate(endDate.getDate() + 5)
 
-  const startDateString = toShortDate(startDate)
-  const endDateString = toShortDate(endDate)
-  const searchTerm = startDateString + ' through ' + endDateString
-  console.log('Search term: ', searchTerm)
-  return searchTerm
-}
+  const startDateMonth = startDate.toLocaleString('en-US', { month: 'short' })
+  const startDayNumber = startDate.toLocaleString('en-US', { day: 'numeric' })
+  const startDay = dateOrdinal(startDayNumber)
 
-function toShortDate(date) {
-  const month = date.toLocaleString('en-US', { month: 'short' })
-  const dayNumber = date.toLocaleString('en-US', { day: 'numeric' })
-  const day = dateOrdinal(dayNumber)
-  return month + ' ' + day
+  const endDateMonth = endDate.toLocaleString('en-US', { month: 'short' })
+  const endDayNumber = endDate.toLocaleString('en-US', { day: 'numeric' })
+  const endDay = dateOrdinal(endDayNumber)
+
+  const startDateString = startDateMonth + ' ' + startDay
+  const endDateString = startDateMonth == endDateMonth ? endDay : endDateMonth + ' ' + endDay
+
+  return startDateString + ' through ' + endDateString
 }
 
 function dateOrdinal(dom) {
@@ -78,4 +83,34 @@ function dateOrdinal(dom) {
   else if (dom == 22 || dom == 2) return dom + "nd"
   else if (dom == 23 || dom == 3) return dom + "rd"
   else return dom + "th"
-};
+}
+
+async function filterToNewFoundTerms(foundTerms) {
+  const dynamo = new DynamoDB()
+
+  let newFoundTerms = []
+  for (const foundTerm of foundTerms) {
+    const foundItem = await dynamo.getItem({
+      TableName: foundTermsTableName,
+      Key: { 
+        url: { 'S': volunteerUrl },
+        term: { 'S': foundTerm } 
+      }
+    }).promise()
+    console.log("foundItem: ", foundItem)
+
+    if (!foundItem.Item) {
+      newFoundTerms.push(foundTerm)
+
+      await dynamo.putItem({
+        TableName: foundTermsTableName,
+        Item: { 
+          url: { 'S': volunteerUrl },
+          term: { 'S': foundTerm } 
+        }
+      }).promise()
+    }
+  }
+
+  return newFoundTerms
+}
