@@ -1,0 +1,6 @@
+{
+    "VaccineMonitorHandler808411A2": {
+        "FOUND_TERMS_TABLE_NAME": "FoundTerms",
+        "ALERT_TOPIC_ARN": "arn:aws:sns:us-west-2:155607981922:VaccineAlertTopic"
+    }
+}

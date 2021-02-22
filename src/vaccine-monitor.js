@@ -1,4 +1,4 @@
-const { SNS, DynamoDB } = require('aws-sdk')
+const { SNS, DynamoDB, Endpoint } = require('aws-sdk')
 const axios = require('axios')
 
 const volunteerUrl = 'https://volunteer.covidvaccineseattle.org'
@@ -86,7 +86,7 @@ function dateOrdinal(dom) {
 }
 
 async function filterToNewFoundTerms(foundTerms) {
-  const dynamo = new DynamoDB()
+  const dynamo = dynamoClient()
 
   let newFoundTerms = []
   for (const foundTerm of foundTerms) {
@@ -113,4 +113,12 @@ async function filterToNewFoundTerms(foundTerms) {
   }
 
   return newFoundTerms
+}
+
+function dynamoClient() {
+  const dynamo = new DynamoDB()
+  if (process.env.AWS_SAM_LOCAL) {
+    dynamo.endpoint = new Endpoint('http://dynamodb:8000')
+  }
+  return dynamo
 }

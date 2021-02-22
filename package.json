@@ -23,6 +23,8 @@
     "typescript": "~3.9.7"
   },
   "dependencies": {
+    "@aws-cdk/aws-cloudwatch": "^1.90.0",
+    "@aws-cdk/aws-cloudwatch-actions": "^1.90.0",
     "@aws-cdk/aws-dynamodb": "^1.90.0",
     "@aws-cdk/aws-events": "^1.90.0",
     "@aws-cdk/aws-events-targets": "^1.90.0",
